@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Jev's Snake</title>
+<style>
+  :root {
+    --bg: #0f1a14;
+    --board: #1b2b21;
+    --grid: #213428;
+    --snake: #6ee36e;
+    --head: #b6ff6b;
+    --food: #ff5a5f;
+    --text: #eaf6ea;
+    --muted: #8fb39a;
+    --accent: #ffd35a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 16px; gap: 12px;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  h1 { margin: 0; font-size: clamp(24px, 6vw, 40px); letter-spacing: 1px; }
+  h1 span { color: var(--accent); }
+  .hud { display: flex; gap: 24px; font-size: 18px; color: var(--muted); }
+  .hud b { color: var(--text); font-size: 22px; }
+  .wrap { position: relative; width: min(92vw, 70vh, 560px); aspect-ratio: 1; }
+  canvas { width: 100%; height: 100%; display: block; border-radius: 14px; background: var(--board); box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; text-align: center; background: rgba(15,26,20,.82); border-radius: 14px; padding: 20px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay h2 { margin: 0; font-size: clamp(22px, 6vw, 36px); }
+  .overlay p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.5; }
+  button {
+    font: inherit; font-size: 20px; font-weight: 700; padding: 12px 28px; border: 0; border-radius: 999px;
+    background: var(--accent); color: #2a2100; cursor: pointer;
+  }
+  button:active { transform: scale(.96); }
+  .speeds { display: flex; gap: 8px; }
+  .speeds button { font-size: 15px; padding: 8px 14px; background: #2c4234; color: var(--text); }
+  .speeds button.on { background: var(--snake); color: #0f1a14; }
+  .modes { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  #watch { background: #7cc4ff; color: #04213a; }
+  .jev { width: min(92vw, 70vh, 560px); background: #16241b; border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--muted); display: none; }
+  .jev.on { display: block; }
+  .jev .row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .jev .lbl { width: 44px; color: var(--text); }
+  .jev .bar { flex: 1; height: 10px; background: #243a2c; border-radius: 6px; overflow: hidden; }
+  .jev .bar i { display: block; height: 100%; background: #7cc4ff; transition: width .1s; }
+  .jev .row.pick .lbl { color: #7cc4ff; font-weight: 700; }
+  .jev .h { flex: 1; font-size: 12px; }
+  .jev .row.out { opacity: .35; }
+  .jev .num { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  .jev .note { color: var(--accent); min-height: 1.2em; margin-top: 6px; }
+  .pad { display: none; grid-template-columns: repeat(3, 64px); gap: 8px; }
+  .pad button { padding: 0; height: 56px; font-size: 24px; background: #2c4234; color: var(--text); border-radius: 14px; }
+  @media (hover: none) { .pad { display: grid; } .keys-hint { display: none; } }
+</style>
+</head>
+<body>
+  <h1>Jev's <span>Snake</span> 🐍</h1>
+  <div class="hud">
+    <div>Score <b id="score">0</b></div>
+    <div>Best <b id="best">0</b></div>
+  </div>
+  <div class="wrap">
+    <canvas id="c" width="560" height="560"></canvas>
+    <div class="overlay" id="overlay">
+      <h2 id="title">Ready?</h2>
+      <p id="msg"><span class="keys-hint">Use the arrow keys or WASD. Space pauses.<br></span>Eat the apples 🍎 and don't bite yourself!<br>Or sit back and watch Jev, TypeSafe's classifier, play.</p>
+      <div class="speeds" id="sizes">
+        <button data-size="6">6×6</button>
+        <button data-size="8">8×8</button>
+        <button data-size="10" class="on">10×10</button>
+        <button data-size="20">20×20</button>
+      </div>
+      <div class="speeds" id="speeds">
+        <button data-speed="170">Easy</button>
+        <button data-speed="120" class="on">Normal</button>
+        <button data-speed="80">Fast</button>
+      </div>
+      <div class="modes">
+        <button id="play">Play!</button>
+        <button id="watch">Watch Jev play 🤖</button>
+      </div>
+    </div>
+  </div>
+  <div class="jev" id="jev">
+    <div><b style="color:var(--text)">Jev</b> <span id="jevModel"></span> · each bar is Jev's probability of yes</div>
+    <div class="row head"><span class="lbl"></span><span class="h">eats?</span><span class="h">safe?</span><span class="h">closer?</span><span class="h">room?</span><span class="num">score</span></div>
+    <div id="jevBars"></div>
+    <div class="note" id="jevNote"></div>
+  </div>
+  <div class="pad">
+    <span></span><button data-dir="up">▲</button><span></span>
+    <button data-dir="left">◀</button><button data-dir="down">▼</button><button data-dir="right">▶</button>
+  </div>
+
+<script>
+let N = 10;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let CELL = canvas.width / N;
+const $ = id => document.getElementById(id);
+const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+const CHEERS = ['Nice!', 'Yum!', 'Go Jev!', 'Awesome!', 'Chomp!', 'Wow!'];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let jevMode = false, game = 0, moveHistory = [], sinceApple = 0;
+
+let snake, dir, queue, food, score, speed = 120, timer = null, running = false, paused = false;
+let best = 0, popups = [];
+function loadBest() {
+  best = 0;
+  try { best = +localStorage.getItem('jev-snake-best-' + N) || 0; } catch {}
+  $('best').textContent = best;
+}
+loadBest();
+
+function reset() {
+  const mid = Math.floor(N / 2);
+  snake = [[mid - 1, mid], [mid - 2, mid], [mid - 3, mid]];
+  dir = 'right'; queue = []; score = 0; popups = []; moveHistory = []; sinceApple = 0;
+  rolls = []; applesPlaced = 0;
+  $('score').textContent = 0;
+  placeFood();
+}
+
+// Apples come from a pre-rolled random sequence, so the board after any list of moves, apples
+// included, can be worked out in advance and Jev can be asked about it early.
+let rolls = [], applesPlaced = 0;
+function appleFor(i, body) {
+  while (rolls.length <= i) rolls.push(Math.random());
+  const taken = new Set(body.map(([x, y]) => x + ',' + y));
+  const free = [];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!taken.has(x + ',' + y)) free.push([x, y]);
+  return free[Math.floor(rolls[i] * free.length)];
+}
+
+function placeFood() {
+  food = appleFor(applesPlaced++, snake);
+}
+
+function turn(d) {
+  const last = queue.length ? queue[queue.length - 1] : dir;
+  const [lx, ly] = DIRS[last], [nx, ny] = DIRS[d];
+  if (lx + nx === 0 && ly + ny === 0) return; // no reversing
+  if (d !== last && queue.length < 3) queue.push(d);
+}
+
+function step() {
+  if (queue.length) dir = queue.shift();
+  const [dx, dy] = DIRS[dir];
+  const head = [(snake[0][0] + dx + N) % N, (snake[0][1] + dy + N) % N]; // walls wrap around
+  const eating = head[0] === food[0] && head[1] === food[1];
+  const body = eating ? snake : snake.slice(0, -1);
+  if (body.some(([x, y]) => x === head[0] && y === head[1])) return gameOver();
+  snake.unshift(head);
+  moveHistory = [...moveHistory, dir].slice(-6); sinceApple++;
+  if (eating) {
+    sinceApple = 0;
+    score++;
+    $('score').textContent = score;
+    popups.push({ x: head[0], y: head[1], text: CHEERS[Math.floor(Math.random() * CHEERS.length)], t: 0 });
+    if (snake.length === N * N) return gameOver(true);
+    placeFood();
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+
+function draw() {
+  ctx.fillStyle = '#1b2b21';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#213428';
+  for (let x = 0; x < N; x++) for (let y = 0; y < N; y++) if ((x + y) % 2) ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+
+  ctx.font = `${CELL * 0.85}px serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🍎', food[0] * CELL + CELL / 2, food[1] * CELL + CELL / 2 + 2);
+
+  // Body: bright green behind the head fading to dark teal at the tail, tapering near the end.
+  const k = CELL / 28; // sizes were tuned for 28px cells
+  for (let i = snake.length - 1; i >= 1; i--) {
+    const [x, y] = snake[i];
+    const t = snake.length > 2 ? (i - 1) / (snake.length - 2) : 0;
+    const mix = (a, b) => Math.round(a + (b - a) * t);
+    ctx.fillStyle = `rgb(${mix(110, 38)}, ${mix(227, 128)}, ${mix(110, 96)})`;
+    const p = 2 * k + Math.max(0, t - 0.7) * CELL * 0.3;
+    roundRect(x * CELL + p, y * CELL + p, CELL - 2 * p, CELL - 2 * p, CELL / 4);
+  }
+
+  // Head: golden with a dark outline, big eyes and a tongue pointing where it is going.
+  const [hx, hy] = snake[0], [dx, dy] = DIRS[dir];
+  const cx = hx * CELL + CELL / 2, cy = hy * CELL + CELL / 2;
+  ctx.strokeStyle = '#e0413a'; ctx.lineWidth = 2 * k; ctx.lineCap = 'round';
+  const tip = [cx + dx * CELL * 0.72, cy + dy * CELL * 0.72];
+  ctx.beginPath();
+  ctx.moveTo(cx + dx * CELL * 0.45, cy + dy * CELL * 0.45); ctx.lineTo(...tip);
+  for (const s of [-1, 1]) {
+    ctx.moveTo(...tip);
+    ctx.lineTo(tip[0] + (dx * 4 + dy * s * 3) * k, tip[1] + (dy * 4 + dx * s * 3) * k);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#ffcf4a';
+  roundRect(hx * CELL, hy * CELL, CELL, CELL, CELL / 3);
+  ctx.strokeStyle = '#9a6b00'; ctx.lineWidth = 2 * k;
+  ctx.stroke();
+  for (const s of [-1, 1]) {
+    const ex = cx + (dx * 4 + dy * s * 6) * k, ey = cy + (dy * 4 + dx * s * 6) * k;
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, ey, 5 * k, 0, 7); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(ex + dx * 2 * k, ey + dy * 2 * k, 2.6 * k, 0, 7); ctx.fill();
+  }
+
+  ctx.font = 'bold 20px system-ui';
+  popups = popups.filter(p => p.t < 8);
+  for (const p of popups) {
+    ctx.globalAlpha = 1 - p.t / 8;
+    ctx.fillStyle = '#ffd35a';
+    ctx.fillText(p.text, p.x * CELL + CELL / 2, p.y * CELL - p.t * 3);
+    p.t++;
+  }
+  ctx.globalAlpha = 1;
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
+  ctx.fill();
+}
+
+function start(watch = false) {
+  reset(); draw();
+  running = true; paused = false; jevMode = watch; game++;
+  $('overlay').classList.add('hidden');
+  $('speeds').style.display = $('sizes').style.display = '';
+  $('jev').classList.toggle('on', watch);
+  clearInterval(timer);
+  if (watch) jevLoop(game); else timer = setInterval(step, speed);
+}
+
+// Jev's replies arrive in uneven batches (one to three moves per round trip), so they go into a
+// buffer and the snake plays them back at one steady tick. The tick only nudges when the buffer
+// runs low (slow down before a stall) or piles up (speed up so moves don't lag Jev's decisions).
+function askJev(state) {
+  const { snake, food, dir, history, since_apple } = state;
+  return fetch('/jev', { method: 'POST', body: JSON.stringify({ n: N, snake, food, dir, history, since_apple }) })
+    .then(async res => {
+      const r = await res.json();
+      if (!res.ok) throw new Error(r.error || res.status);
+      return r;
+    });
+}
+
+function current() {
+  return { snake, food, dir, history: moveHistory, since_apple: sinceApple, apples: applesPlaced };
+}
+
+// The board after `moves` from `st`, or null once the game would be over.
+function predict(st, moves) {
+  let { snake: s, food: f, history: h, since_apple: since, apples } = st;
+  for (const m of moves) {
+    const [dx, dy] = DIRS[m];
+    const head = [(s[0][0] + dx + N) % N, (s[0][1] + dy + N) % N];
+    const eats = head[0] === f[0] && head[1] === f[1];
+    const body = eats ? s : s.slice(0, -1);
+    if (body.some(([x, y]) => x === head[0] && y === head[1])) return null;
+    s = [head, ...body];
+    h = [...h, m].slice(-6);
+    since = eats ? 0 : since + 1;
+    if (eats) {
+      if (s.length === N * N) return null;
+      f = appleFor(apples++, s);
+    }
+  }
+  return { snake: s, food: f, dir: moves[moves.length - 1], history: h, since_apple: since, apples };
+}
+
+async function jevLoop(g) {
+  $('jevNote').textContent = 'Asking Jev…';
+  const buffer = [];
+  const live = () => running && g === game;
+  let failed = null;
+
+  (async () => { // keep one request in flight for the board at the end of the buffer
+    let ahead = current();
+    while (live() && ahead) {
+      if (buffer.length >= 6) { await sleep(20); continue; }
+      let r;
+      try { r = await askJev(ahead); } catch (e) { failed = e; return; }
+      if (!live()) return;
+      for (const st of r.steps) buffer.push([st, r.steps.length]);
+      ahead = predict(ahead, r.steps.map(st => st.move));
+    }
+  })();
+
+  let tick = Math.max(speed, 280), next = performance.now() + tick;
+  while (live()) {
+    await sleep(next - performance.now());
+    while (live() && (paused || (!buffer.length && !failed))) await sleep(10);
+    if (failed) return jevError(g, failed);
+    if (!live()) return;
+    const t = performance.now();
+    const [st, batch] = buffer.shift();
+    showJev(st, batch);
+    queue = [st.move];
+    step();
+    // Nudge by 1% at most per move so the pace never visibly changes. After a stall, restart the
+    // beat instead of rushing to catch up.
+    if (buffer.length < 2) tick *= 1.01;
+    else if (buffer.length > 4) tick = Math.max(speed, tick * 0.99);
+    next = (t - next > 20 ? t : next) + tick;
+  }
+}
+
+function jevError(g, e) {
+  if (g !== game) return;
+  running = false;
+  $('title').textContent = "Couldn't reach Jev";
+  $('msg').textContent = location.protocol === 'file:'
+    ? 'Start the server with: uv run server.py, then open http://localhost:8000'
+    : String(e.message || e);
+  $('play').textContent = 'Play!';
+  $('overlay').classList.remove('hidden');
+}
+
+function showJev(r, batch) {
+  $('jevModel').textContent = (r.model ? `(${r.model})` : '') + (batch > 1 ? ` · ${batch} moves from one round trip` : '');
+  $('jevBars').innerHTML = ['up', 'down', 'left', 'right'].map(d => {
+    const row = r.rows[d];
+    const bar = p => `<span class="bar"><i style="width:${(p * 100).toFixed(0)}%"></i></span>`;
+    const cls = d === r.jev_pick ? ' pick' : row.score == null ? ' out' : '';
+    return `<div class="row${cls}"><span class="lbl">${d}</span>${bar(row.eats)}${bar(row.safe)}${bar(row.closer)}${bar(row.roomy)}<span class="num">${row.score == null ? '–' : row.score.toFixed(2)}</span></div>`;
+  }).join('');
+  $('jevNote').textContent = r.overridden ? `Jev's best score was ${r.jev_pick}, which crashes, so the game took its next best: ${r.move}.` : '';
+}
+
+function gameOver(won) {
+  running = false;
+  clearInterval(timer);
+  let newBest = false;
+  if (score > best) {
+    best = score; newBest = score > 0;
+    $('best').textContent = best;
+    try { localStorage.setItem('jev-snake-best-' + N, best); } catch {}
+  }
+  const who = jevMode ? 'Jev' : 'You';
+  $('title').textContent = won ? `${who} won! 🏆` : (jevMode ? 'Jev crashed!' : 'Game over!');
+  $('msg').textContent = `${who} got ${score} apple${score === 1 ? '' : 's'}.` + (newBest ? ' New high score! 🎉' : '');
+  $('play').textContent = 'Play again';
+  $('overlay').classList.remove('hidden');
+}
+
+function togglePause() {
+  if (!running) return;
+  paused = !paused;
+  if (paused) {
+    clearInterval(timer);
+    $('title').textContent = 'Paused';
+    $('msg').textContent = 'Press Space to keep going.';
+    $('speeds').style.display = $('sizes').style.display = 'none';
+    $('play').textContent = 'Resume';
+    $('watch').style.display = 'none';
+    $('overlay').classList.remove('hidden');
+  } else {
+    $('overlay').classList.add('hidden');
+    $('speeds').style.display = $('sizes').style.display = '';
+    $('watch').style.display = '';
+    if (!jevMode) timer = setInterval(step, speed);
+  }
+}
+
+$('play').onclick = () => paused ? togglePause() : start();
+$('watch').onclick = () => start(true);
+$('sizes').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  N = +b.dataset.size; CELL = canvas.width / N;
+  document.querySelectorAll('#sizes button').forEach(x => x.classList.toggle('on', x === b));
+  loadBest(); reset(); draw();
+};
+$('speeds').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  speed = +b.dataset.speed;
+  document.querySelectorAll('#speeds button').forEach(x => x.classList.toggle('on', x === b));
+};
+
+const KEYS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right', W: 'up', S: 'down', A: 'left', D: 'right' };
+document.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    if (!running) start(); else togglePause();
+    return;
+  }
+  const d = KEYS[e.key];
+  if (d) { e.preventDefault(); if (running && !paused && !jevMode) turn(d); }
+});
+
+document.querySelectorAll('.pad button').forEach(b =>
+  b.addEventListener('pointerdown', e => { e.preventDefault(); if (running && !paused && !jevMode) turn(b.dataset.dir); }));
+
+let touch = null;
+canvas.addEventListener('pointerdown', e => { touch = [e.clientX, e.clientY]; });
+canvas.addEventListener('pointerup', e => {
+  if (!touch || !running || paused || jevMode) return;
+  const dx = e.clientX - touch[0], dy = e.clientY - touch[1];
+  if (Math.max(Math.abs(dx), Math.abs(dy)) > 20) turn(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
+  touch = null;
+});
+
+reset(); draw();
+</script>
+</body>
+</html>
