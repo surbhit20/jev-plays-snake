@@ -4,7 +4,9 @@ A snake game steered by [Jev](https://docs.typesafe.ai/introduction), TypeSafe's
 
 You can also just play it yourself with the arrow keys.
 
-> 🎥 *[Video or GIF of a game goes here]*
+![Jev playing snake on an 8x8 board](jev-plays-snake.gif)
+
+*Jev playing an 8x8 game. The bars are its probabilities for each direction, updating every move.*
 
 ## How it works
 
